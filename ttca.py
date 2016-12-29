@@ -5,6 +5,7 @@ from collections import OrderedDict
 import timeit
 import csv
 import sys
+import heapq
 
 
 # update_progress() : Displays or updates a console progress bar
@@ -30,11 +31,122 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 
+
+class ODict(OrderedDict):
+	''' Inherit from OrderedDict, but add the function get_first '''
+	def get_first(self):
+		''' Return the first element of the OrderedDict'''
+		return next(iter(self))
+		
+class Ttca():
+	''' Take prefmatrix, output which player gets which house'''
+	'''Prefmatrix: i-th row, j-th column: player i ranks player M[i,j] on the j-th place'''
+	''' whereby M[i,j] \in {1,...,k} \forall i,j, i.e. Players are denoted with 1...keys'''
+	''' Return: A dictionary, whereby dict[i] is the house that player i gets'''
+	prefmatrix = None
+	total_number_of_players = 0
+	number_of_players = 0
+	cycles = None
+	allocation = {}
+	def init_data_structures(self):
+		''' This function is supposed to init the data structures (e.g. orderedDict, Matrix, etc.)'''
+		raise Exception('Not implemented')
+	def retrieve_edges(self):
+		''' Retrieve the next edges_list for round t'''
+		raise Exception('Not implemented')
+	def process_cycles(self):
+		''' Given the cycles of round t, process the resulsts, i.e. update data structures'''
+		raise Exception('Not implemented')
+	def __init__(self,prefmatrix,show_progress=True,progress_function=update_progress):
+		self.prefmatrix = prefmatrix
+		self.show_progress = show_progress
+		self.progress_function = progress_function
+	def calculate_allocations(self):
+		''' Calculate the allocations with the help of the class functions'''
+		self.total_number_of_players = self.number_of_players = self.prefmatrix.shape[0]
+		self.init_data_structures()
+		while self.number_of_players>1:
+			G = nx.DiGraph()
+			# Create the graph: Each player "points" to the player he likes best out of the remaining players
+			edges_list = self.retrieve_edges()
+			G.add_edges_from(edges_list)
+			# Find all the cycles in the graph, i.e. all the players that would be better off by trading
+			cycles = nx.simple_cycles(G)
+			self.cycles = list(cycles)
+			self.process_cycles()
+			if self.show_progress==True:
+				self.progress_function(1-(float(self.number_of_players)/self.total_number_of_players))
+		return self.allocation
+		
+class OrderedDictTtca(Ttca):
+	prefdict = {}
+	def init_data_structures(self):
+		for i in range(1,self.number_of_players+1): # Foreach player
+			tmpdict = ODict() # Create an OrderedDict
+			tmpdict = ODict.fromkeys(list(self.prefmatrix[i-1]),None)
+			#for j in range(number_of_players): #
+			#	tmpdict[prefmatrix[i-1,j]] = None # Add the rank as the j-th keys, i.e. players are inserted in the dict
+                # in the same order as player i ranks them
+			self.prefdict[i] = tmpdict
+			
+	def retrieve_edges(self):
+		return map(lambda i: (i,self.prefdict[i].get_first()),self.prefdict.keys())
+	def process_cycles(self):
+		for c in self.cycles:
+				for p in c:
+					self.allocation[p] = self.prefdict[p].get_first()
+		for c in self.cycles:
+				for p in c:
+					for d in self.prefdict.values():
+						del d[p]
+					del self.prefdict[p]
+					self.number_of_players -= 1
+		
+'''	
+class Ttca():
+	def ttca_rows_as_player(prefmatrix,show_progress=True,progress_function=update_progress):
 	
-class Ttca(): 
+	def ttca_ordered_set(prefmatrix,show_progress=True,progress_function=update_progress):
+		 Take prefmatrix, output which player gets which house
+		Prefmatrix: i-th row, j-th column: player i ranks player M[i,j] on the j-th place
+		 whereby M[i,j] \in {1,...,k} \forall i,j, i.e. Players are denoted with 1...keys
+		 Return: A dictionary, whereby dict[i] is the house that player i gets
+		prefdict = {} # Prefdict[i] = Preference list of player i as an OrderedDict
+		number_of_players = prefmatrix.shape[0]
+		for i in range(1,number_of_players+1): # Foreach player
+			tmpdict = ODict() # Create an OrderedDict
+			tmpdict = ODict.fromkeys(list(prefmatrix[i-1]),None)
+			#for j in range(number_of_players): #
+			#	tmpdict[prefmatrix[i-1,j]] = None # Add the rank as the j-th keys, i.e. players are inserted in the dict
+                # in the same order as player i ranks them
+			prefdict[i] = tmpdict
+		allocation = {} # Allocation dict, player i gets house of allocation[i]
+		total_number_of_players = prefmatrix.shape[0]
+		while number_of_players>1:
+			G = nx.DiGraph()
+			# Create the graph: Each player "points" to the player he likes best out of the remaining players
+			edges_list = map(lambda i: (i,prefdict[i].get_first()),prefdict.keys())
+			G.add_edges_from(edges_list)
+			# Find all the cycles in the graph, i.e. all the players that would be better off by trading
+			cycles = nx.simple_cycles(G)
+			cycles = list(cycles)
+			#For each cycle, save the allocation and delete the player.
+			for c in cycles:
+				for p in c:
+					allocation[p] = prefdict[p].get_first()
+			for c in cycles:
+				for p in c:
+					for d in prefdict.values():
+						del d[p]
+					del prefdict[p]
+					number_of_players -= 1
+			if show_progress==True:
+				progress_function(1-(float(number_of_players)/total_number_of_players))
+		return allocation
+
 	min_player = 1 # Are players indexed by zero,one,etc.?
 	def get_first_pref(row):
-		''' Upon receiving a row-preference vector, get the first element that is not 0'''
+		 Upon receiving a row-preference vector, get the first element that is not 0
 		if len(row.shape)!=1:
 			raise ValueError('First argument must be 1d vector')
 		isnanidx = np.argmax(row > -1)
@@ -44,10 +156,10 @@ class Ttca():
 		else:
 			return row[isnanidx] 
 	def ttca_vectorized(prefmatrix: np.ndarray,show_progress=True,progress_function=update_progress): 
-		''' Take prefmatrix, output which player gets which house''' 
-		'''Prefmatrix: An ndarray where i-th row, j-th column: player i ranks player M[i,j] on the j-th place'''
-		''' whereby M[i,j] \in {1,...,k} \forall i,j, i.e. Players are denoted with 1...keys''' 
-		''' Return: A dictionary, whereby dict[i] is the house that player i gets'''
+		# Take prefmatrix, output which player gets which house
+		#Prefmatrix: An ndarray where i-th row, j-th column: player i ranks player M[i,j] on the j-th place
+		# whereby M[i,j] \in {1,...,k} \forall i,j, i.e. Players are denoted with 1...keys
+		# Return: A dictionary, whereby dict[i] is the house that player i gets
 		if type(prefmatrix)!=np.ndarray:
 			raise TypeError('Preference matrix must be of type numpy.ndarray')
 		if prefmatrix.shape[0]!=prefmatrix.shape[1]:
@@ -62,6 +174,7 @@ class Ttca():
 		while number_of_players>1:
 			G = nx.DiGraph()
 			# Create the graph: Each player "points" to the player he likes best out of the remaining players
+			#first_pref_list = list(map(lambda i: (i,Ttca.get_first_pref(prefmatrix[i-min_player])),remaining_player_set))
 			edges_list = list(map(lambda i: (i,Ttca.get_first_pref(prefmatrix[i-min_player])),remaining_player_set))
 			G.add_edges_from(edges_list)
 			# Find all the cycles in the graph, i.e. all the players that would be better off by trading
@@ -72,6 +185,7 @@ class Ttca():
 			removed_players = set()
 			for c in cycles:
 				for p in c:
+					##
 					allocation[p] = Ttca.get_first_pref(prefmatrix[p-min_player])
 				cset = set(c)
 				remaining_player_set -= cset
@@ -87,7 +201,7 @@ class Ttca():
 				progress_function(1-(float(number_of_players)/total_number_of_players))
 		return allocation
 
-'''	
+
 def ttca(prefmatrix): 
 	# Take prefmatrix, output which player gets which house
 	# i-th rows, j-th column: player i ranks player M[i,j] on the j-th place
@@ -124,11 +238,13 @@ def ttca(prefmatrix):
 		#print("Number of Players",number_of_players)
 		#print("prefdict",prefdict)
 	#print("t",t)
-	return allocation	'''
-		
+	return allocation	
+'''	
+
 def test_ttca():
 	prefmatrix = np.array([[5,2,1,3,4],[1,2,3,4,5],[3,2,1,5,4],[4,3,2,5,1],[5,4,3,2,1]])
-	allocation_2 = Ttca.ttca_vectorized(prefmatrix)
+	ttca = OrderedDictTtca(prefmatrix)
+	allocation_2 = ttca.calculate_allocations()
 	print("Allocation",allocation_2)
 
 def wrapper(func, *args, **kwargs):
@@ -137,7 +253,7 @@ def wrapper(func, *args, **kwargs):
     return wrapped	
 	
 def big_random_ttca():
-	num_players = 3000
+	num_players = 5000
 	prefmatrix = np.zeros((num_players,num_players))
 	for i in range(num_players):
 		tmprow = list(range(1,num_players+1))
@@ -145,9 +261,12 @@ def big_random_ttca():
 		prefmatrix[i] = tmprow
 	prefmatrix = prefmatrix.astype(int)
 	#print(prefmatrix)
+	wrapped = wrapper(Ttca.ttca_ordered_set,prefmatrix)
+	t = timeit.timeit(wrapped,number=1) # 0.937773827160493
+	print("OrderedSet",t)
 	wrapped = wrapper(Ttca.ttca_vectorized,prefmatrix)
 	t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-	print(t)
+	print("Vectorized",t)
 	#print(allocation)
 	
-big_random_ttca()
+test_ttca()
