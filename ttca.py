@@ -65,7 +65,7 @@ class Ttca():
 		''' Calculate the allocations with the help of the class functions'''
 		self.total_number_of_players = self.number_of_players = self.prefmatrix.shape[0]
 		self.init_data_structures()
-		while self.number_of_players>1:
+		while self.number_of_players>=1:
 			G = nx.DiGraph()
 			# Create the graph: Each player "points" to the player he likes best out of the remaining players
 			edges_list = self.retrieve_edges()
@@ -81,7 +81,7 @@ class Ttca():
 class OrderedDictTtca(Ttca):
 	prefdict = {}
 	def init_data_structures(self):
-		for i in range(1,self.number_of_players+1): # Foreach player
+		for i in range(1,self.total_number_of_players+1): # Foreach player
 			tmpdict = ODict() # Create an OrderedDict
 			tmpdict = ODict.fromkeys(list(self.prefmatrix[i-1]),None)
 			#for j in range(number_of_players): #
@@ -101,7 +101,35 @@ class OrderedDictTtca(Ttca):
 						del d[p]
 					del self.prefdict[p]
 					self.number_of_players -= 1
-		
+
+class ColumnWiseTtca(Ttca):
+	''' Transform the prefmatrix, such that each row represents the preference list of one player '''
+	''' And the entry of the j-th column of the row denotes the ranking (one,two,three..) of the j-th player's resource'''
+	''' -1 means player deleted'''
+	pref_list = None			
+	def init_data_structures(self):
+		d = self.total_number_of_players+1
+		self.tmatrix = np.zeros((d-1,d))
+		self.tmatrix = self.tmatrix.astype(int)
+		for i in range(0,self.total_number_of_players):
+			self.tmatrix[i,0] = i
+			for j in range(0,self.total_number_of_players):
+				self.tmatrix[i,self.prefmatrix[i,j]] = j
+	def retrieve_edges(self):
+		player_list = list(self.tmatrix[:,0])
+		self.pref_list = np.argmin(self.tmatrix[:,1:],axis=0) # Get the first preference for each player
+		edges_list = list(zip(player_list,self.pref_list))
+		return edges_list
+	def process_cycles(self):
+		for c in self.cycles:
+			for p in c:
+				self.allocation[p+1] = self.pref_list[p]+1 # If p is in a cycle, then p got his best preference in round t 
+				mask = (self.tmatrix[:,0] != p)
+				self.tmatrix = self.tmatrix[mask]
+				self.tmarix = np.delete(self.tmatrix,c,1)
+				self.number_of_players -= len(c)
+		#print(self.tmatrix)
+	
 '''	
 class Ttca():
 	def ttca_rows_as_player(prefmatrix,show_progress=True,progress_function=update_progress):
@@ -243,8 +271,11 @@ def ttca(prefmatrix):
 
 def test_ttca():
 	prefmatrix = np.array([[5,2,1,3,4],[1,2,3,4,5],[3,2,1,5,4],[4,3,2,5,1],[5,4,3,2,1]])
-	ttca = OrderedDictTtca(prefmatrix)
+	ttca = ColumnWiseTtca(prefmatrix)
 	allocation_2 = ttca.calculate_allocations()
+	ttca = OrderedDictTtca(prefmatrix)
+	allocation = ttca.calculate_allocations()
+	print("allocation 1:",allocation)
 	print("Allocation",allocation_2)
 
 def wrapper(func, *args, **kwargs):
@@ -253,7 +284,7 @@ def wrapper(func, *args, **kwargs):
     return wrapped	
 	
 def big_random_ttca():
-	num_players = 5000
+	num_players = 10000
 	prefmatrix = np.zeros((num_players,num_players))
 	for i in range(num_players):
 		tmprow = list(range(1,num_players+1))
@@ -261,12 +292,15 @@ def big_random_ttca():
 		prefmatrix[i] = tmprow
 	prefmatrix = prefmatrix.astype(int)
 	#print(prefmatrix)
-	wrapped = wrapper(Ttca.ttca_ordered_set,prefmatrix)
+	print("starting")
+	ttca = ColumnWiseTtca(prefmatrix)
+	wrapped = wrapper(ttca.calculate_allocations)
 	t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-	print("OrderedSet",t)
-	wrapped = wrapper(Ttca.ttca_vectorized,prefmatrix)
+	print("ColumnWise",t)
+	ttca = OrderedDictTtca(prefmatrix)
+	wrapped = wrapper(ttca.calculate_allocations)
 	t = timeit.timeit(wrapped,number=1) # 0.937773827160493
 	print("Vectorized",t)
 	#print(allocation)
-	
-test_ttca()
+
+big_random_ttca()
