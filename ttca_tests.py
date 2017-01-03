@@ -35,10 +35,12 @@ def update_progress(progress):
 
 class TestTtcaMethods(unittest.TestCase):
 	def test_ttca(self):
+		print("Test Ttca")
 		prefmatrix = np.array([[5,2,1,3,4],[1,2,3,4,5],[3,2,1,5,4],[4,3,2,5,1],[5,4,3,2,1]])
-		#ttca = OrderedDictTtca(prefmatrix)
-		#allocation = ttca.calculate_allocations()
-		#self.assertEqual(allocation,{5:5,4:4,3:3,1:2,2:1})
+		ttca = OrderedDictTtca(prefmatrix)
+		allocation = ttca.calculate_allocations()
+		
+		self.assertEqual(allocation,{5:5,4:4,3:3,1:2,2:1})
 	
 	def test_big_random_ttca(self):
 		num_players = 50
@@ -48,18 +50,17 @@ class TestTtcaMethods(unittest.TestCase):
 			np.random.shuffle(tmprow)
 			prefmatrix[i] = tmprow
 		prefmatrix = prefmatrix.astype(int)
-		#print(prefmatrix)
 		print("starting")
-		#ttcac = Ttca(prefmatrix)
-		#wrapped = wrapper(ttcac.calculate_allocations)
-		#t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-		#print("ColumnWise",t)
+		ttcac = Ttca(prefmatrix,show_progress=True,progress_function=update_progress)
+		wrapped = wrapper(ttcac.calculate_allocations)
+		t = timeit.timeit(wrapped,number=1) # 0.937773827160493
+		print("ColumnWise",t)
 		ttcao = OrderedDictTtca(prefmatrix,show_progress=True,progress_function=update_progress)
 		wrapped = wrapper(ttcao.calculate_allocations)
 		t = timeit.timeit(wrapped,number=1) # 0.937773827160493
 		print("OrderedDictTtca",t)
-		#self.maxDiff = 6400
-		#self.assertEqual(ttcac.calculate_allocations(),ttcao.calculate_allocations())
+		self.maxDiff = 6400
+		self.assertEqual(ttcac.calculate_allocations(),ttcao.calculate_allocations())
 '''			
 def test_ttca():
 	

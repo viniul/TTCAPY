@@ -13,11 +13,6 @@ class TtcaBaseClass():
 	'''Prefmatrix: i-th row, j-th column: player i ranks player M[i,j] on the j-th place'''
 	''' whereby M[i,j] \in {1,...,k} \forall i,j, i.e. Players are denoted with 1...keys'''
 	''' Return: A dictionary, whereby dict[i] is the house that player i gets'''
-	prefmatrix = None
-	total_number_of_players = 0
-	number_of_players = 0
-	cycles = None
-	allocation = {}
 	def init_data_structures(self):
 		''' This function is supposed to init the data structures (e.g. orderedDict, Matrix, etc.)'''
 		raise Exception('Not implemented')
@@ -27,14 +22,11 @@ class TtcaBaseClass():
 	def process_cycles(self):
 		''' Given the cycles of round t, process the resulsts, i.e. update data structures'''
 		raise Exception('Not implemented')
-	def init_from_csv_file(self,csv_path):
-		with open(csv_path,'rb') as f:
-			reader = csv.reader(f)
-			print(list(reader))
 	def __init__(self,prefmatrix,show_progress=False,progress_function=None):
 		self.prefmatrix = prefmatrix
 		self.show_progress = show_progress
 		self.progress_function = progress_function
+		self.allocation = {}
 	def calculate_allocations(self):
 		''' Calculate the allocations with the help of the class functions'''
 		self.total_number_of_players = self.number_of_players = self.prefmatrix.shape[0]
@@ -59,6 +51,9 @@ class Ttca(TtcaBaseClass):
 	pref_list = None
 	min_player = 1
 	pref_dict = None
+	def __init__(self,prefmatrix,show_progress=False,progress_function=None):
+		print("Init Called")
+		super(Ttca,self).__init__(prefmatrix,show_progress,progress_function)
 	def init_data_structures(self):
 		d = self.total_number_of_players+1
 		self.tmatrix = np.zeros((d-1,d))
@@ -94,6 +89,8 @@ class ODict(OrderedDict):
 		
 class OrderedDictTtca(TtcaBaseClass):
 	prefdict = {}
+	def __init__(self,prefmatrix,show_progress=False,progress_function=None):
+		super(OrderedDictTtca,self).__init__(prefmatrix,show_progress,progress_function)
 	def init_data_structures(self):
 		for i in range(1,self.total_number_of_players+1): # Foreach player
 			tmpdict = ODict() # Create an OrderedDict
@@ -107,12 +104,13 @@ class OrderedDictTtca(TtcaBaseClass):
 		self.first_pref = dict(edges_list) # Transform the list into a dict
 		return map(lambda i: (i,self.prefdict[i].get_first()),self.prefdict.keys())
 	def process_cycles(self):
+		remove_keys = list()
 		for c in self.cycles:
 			for p in c:
 				self.allocation[p] = self.first_pref[p]
 				del self.prefdict[p]
-				self.number_of_players = -1
-		for c in self.cycles:
-			for p in c:
+				remove_keys.append(p)
+		for p in remove_keys:
 				for d in self.prefdict.values():
 					del d[p]
+		self.number_of_players -= len(remove_keys)
