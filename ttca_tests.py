@@ -1,8 +1,9 @@
 import unittest
 import numpy as np
-from ttcalib import Ttca,OrderedDictTtca
+from ttcalib import Ttca,ODict,TtcaBaseClass
 import timeit
 import sys
+import csv
 
 
 def wrapper(func, *args, **kwargs):
@@ -33,69 +34,55 @@ def update_progress(progress):
     sys.stdout.write(text)
     sys.stdout.flush()
 
+class TestBaseClassMethods(unittest.TestCase): 
+	def test_csv_reader(self):
+		ttca = TtcaBaseClass(prefmatrix=None)
+		prefmatrix = np.array([[1,5,2,1,3,4],[2,1,2,3,4,5],[3,3,2,1,5,4],[4,4,3,2,5,1],[5,5,4,3,2,1]])
+		with open('tmp.csv','w',newline='') as csvfile: 
+			csvwriter = csv.writer(csvfile,delimiter=';')
+			for i in range(prefmatrix.shape[0]):
+				csvwriter.writerow(list(prefmatrix[i]))
+		ttca.init_prefmatrix_from_csv_file('tmp.csv',delimiter=';')
+		np.testing.assert_array_equal(prefmatrix[:,range(1,6)],ttca.prefmatrix)
+		
+	
 class TestTtcaMethods(unittest.TestCase):
 	def test_ttca(self):
 		print("Test Ttca")
 		prefmatrix = np.array([[5,2,1,3,4],[1,2,3,4,5],[3,2,1,5,4],[4,3,2,5,1],[5,4,3,2,1]])
-		ttca = OrderedDictTtca(prefmatrix)
+		ttca = Ttca(prefmatrix)
 		allocation = ttca.calculate_allocations()
 		
 		self.assertEqual(allocation,{5:5,4:4,3:3,1:2,2:1})
 	
 	def test_big_random_ttca(self):
-		num_players = 50
+		num_players = 100
 		prefmatrix = np.zeros((num_players,num_players))
 		for i in range(num_players):
 			tmprow = list(range(1,num_players+1))
 			np.random.shuffle(tmprow)
 			prefmatrix[i] = tmprow
 		prefmatrix = prefmatrix.astype(int)
-		print("starting")
+		print("Starting Benchmark...")
 		ttcac = Ttca(prefmatrix,show_progress=True,progress_function=update_progress)
 		wrapped = wrapper(ttcac.calculate_allocations)
 		t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-		print("ColumnWise",t)
-		ttcao = OrderedDictTtca(prefmatrix,show_progress=True,progress_function=update_progress)
-		wrapped = wrapper(ttcao.calculate_allocations)
-		t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-		print("OrderedDictTtca",t)
-		self.maxDiff = 6400
-		self.assertEqual(ttcac.calculate_allocations(),ttcao.calculate_allocations())
-'''			
-def test_ttca():
+		print("Needed",t,"seconds for a",num_players,"players instance")
+		
+class TestFirstDict(unittest.TestCase):
+	def test_get_empty_item(self):
+		emptydict = ODict()
+		with self.assertRaises(StopIteration):
+			emptydict.get_first()
+	def test_get_first_item(self):
+		testdict = ODict()
+		testdict[0] = 999
+		self.assertEqual(testdict.get_first(),0)
+	def test_items_are_retrieved_in_order(self):
+		testdict = ODict()
+		testdict['first']= 'firstitem'
+		testdict['second'] = 'seconditem'
+		self.assertEqual(testdict.get_first(),'first')
 	
-	allocation_2 = ttca.calculate_allocations()
-	ttca = OrderedDictTtca(prefmatrix)
-	allocation = ttca.calculate_allocations()
-	print("allocation 1:",allocation)
-	print("Allocation",allocation_2)
-
-def wrapper(func, *args, **kwargs):
-    def wrapped():
-        return func(*args, **kwargs)
-    return wrapped	
-	
-def big_random_ttca():
-	num_players = 50
-	prefmatrix = np.zeros((num_players,num_players))
-	for i in range(num_players):
-		tmprow = list(range(1,num_players+1))
-		np.random.shuffle(tmprow)
-		prefmatrix[i] = tmprow
-	prefmatrix = prefmatrix.astype(int)
-	#print(prefmatrix)
-	print("starting")
-	ttca = ColumnWiseTtca(prefmatrix)
-	wrapped = wrapper(ttca.calculate_allocations)
-	t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-	print("ColumnWise",t)
-	ttca = OrderedDictTtca(prefmatrix)
-	wrapped = wrapper(ttca.calculate_allocations)
-	t = timeit.timeit(wrapped,number=1) # 0.937773827160493
-	print("Vectorized",t)
-	#print(allocation)
-
-big_random_ttca()
-'''
 if __name__ == '__main__':
 	unittest.main()

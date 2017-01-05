@@ -1,17 +1,13 @@
 import networkx as nx
 import numpy as np 
+import matplotlib.pyplot as plt
 from collections import OrderedDict
 import timeit
 import csv
 import sys
+import heapq
 
-
-class ODict(OrderedDict):
-	''' Inherit from OrderedDict, but add the function get_first '''
-	def get_first(self):
-		''' Return the first element of the OrderedDict'''
-		return next(iter(self))
-	
+		
 class TtcaBaseClass():
 	''' Take prefmatrix, output which player gets which house'''
 	'''Prefmatrix: i-th row, j-th column: player i ranks player M[i,j] on the j-th place'''
@@ -31,30 +27,6 @@ class TtcaBaseClass():
 		self.show_progress = show_progress
 		self.progress_function = progress_function
 		self.allocation = {}
-	def init_prefmatrix_from_csv_file(self,csv_path,delimiter=';'):
-		preflists = list()
-		with open(csv_path, newline='') as csvfile:
-			prefreader = csv.reader(csvfile,delimiter=delimiter)
-			row_shape = None
-			for row in prefreader:
-				if row_shape is None: 
-					row_shape = len(row)
-				elif len(row)!=row_shape: 
-						raise ValueError('Each preferencelist must be of the same length')
-				preflists.append(row)
-		if row_shape!=len(preflists)+1: 
-			raise ValueError('The csv file does not contain the same amount of players as the preference rankings')
-		self.obj_player_dict = {}
-		self.player_obj_dict = {}
-		for i in range(len(preflists)):
-			self.obj_player_dict[preflists[i][0]] = i+1
-			self.player_obj_dict[i] = preflists[0][0]
-		prefmatrix = np.eye(len(preflists),dtype=int)		
-		for i in range(0,len(preflists)): 
-			for j in range(1,row_shape):
-				prefmatrix[i,j-1] = self.obj_player_dict[preflists[i][j]]#preflists[i][j]
-		self.prefmatrix = prefmatrix
-		return self.prefmatrix
 	def calculate_allocations(self):
 		''' Calculate the allocations with the help of the class functions'''
 		self.total_number_of_players = self.number_of_players = self.prefmatrix.shape[0]
@@ -69,19 +41,63 @@ class TtcaBaseClass():
 			self.cycles = list(cycles)
 			self.process_cycles()
 			if self.show_progress==True:
-				self.progress_function(1-(float(self.number_of_players)/self.total_number_of_players))	
+				self.progress_function(1-(float(self.number_of_players)/self.total_number_of_players))
 		return self.allocation
-	
 
 class Ttca(TtcaBaseClass):
+	''' Transform the prefmatrix, such that each row represents the preference list of one player '''
+	''' And the entry of the j-th column of the row denotes the ranking (one,two,three..) of the j-th player's resource'''
+	''' -1 means player deleted'''
+	pref_list = None
+	min_player = 1
+	pref_dict = None
+	def __init__(self,prefmatrix,show_progress=False,progress_function=None):
+		print("Init Called")
+		super(Ttca,self).__init__(prefmatrix,show_progress,progress_function)
+	def init_data_structures(self):
+		d = self.total_number_of_players+1
+		self.tmatrix = np.zeros((d-1,d))
+		self.tmatrix = self.tmatrix.astype(int)
+		for i in range(0,self.total_number_of_players):
+			self.tmatrix[i,0] = i
+			for j in range(0,self.total_number_of_players):
+				self.tmatrix[i,self.prefmatrix[i,j]] = j
+	def retrieve_edges(self):
+		player_list = list(self.tmatrix[:,0])
+		self.pref_list = np.argmin(self.tmatrix[:,1:],axis=1) # Get the first preference for each player
+		self.pref_list = list(self.pref_list)
+		self.edges_list = list(zip(player_list,self.pref_list))
+		self.pref_dict = dict(self.edges_list)
+		return self.edges_list
+	def process_cycles(self):
+		for c in self.cycles:
+			for p in c:
+				try:
+					self.allocation[p+1] = self.pref_dict[p]+1 # If p is in a cycle, then p got his best preference in round t 
+					self.tmatrix = self.tmatrix[self.tmatrix[:,0] != p]
+					self.tmatrix[:,p+1] = self.total_number_of_players+1
+					self.number_of_players -= 1
+				except IndexError as err:
+					print("Index Error at p=",p)
+					raise err
+
+class ODict(OrderedDict):
+	''' Inherit from OrderedDict, but add the function get_first '''
+	def get_first(self):
+		''' Return the first element of the OrderedDict'''
+		return next(iter(self))
+		
+class OrderedDictTtca(TtcaBaseClass):
 	prefdict = {}
 	def __init__(self,prefmatrix,show_progress=False,progress_function=None):
-		super(Ttca,self).__init__(prefmatrix,show_progress,progress_function)
+		super(OrderedDictTtca,self).__init__(prefmatrix,show_progress,progress_function)
 	def init_data_structures(self):
 		for i in range(1,self.total_number_of_players+1): # Foreach player
 			tmpdict = ODict() # Create an OrderedDict
 			tmpdict = ODict.fromkeys(list(self.prefmatrix[i-1]),None)
 			self.prefdict[i] = tmpdict
+
+				
 	def retrieve_edges(self):
 		self.first_pref = {}
 		edges_list = list(map(lambda i: (i,self.prefdict[i].get_first()),self.prefdict.keys()))
