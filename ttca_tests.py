@@ -45,7 +45,24 @@ class TestBaseClassMethods(unittest.TestCase):
 		ttca.init_prefmatrix_from_csv_file('tmp.csv',delimiter=';')
 		np.testing.assert_array_equal(prefmatrix[:,range(1,6)],ttca.prefmatrix)
 		
-	
+	def test_allocation_to_object(self):
+		ttca = Ttca(prefmatrix=None)
+		l1 = ['Adorno','Focault','Weber','Adorno']
+		l2 = ['Focault','Adorno','Focault','Weber']
+		l3 = ['Weber','Adorno','Focault','Weber']
+		preflists= []
+		preflists.append(l1)
+		preflists.append(l2)
+		preflists.append(l3)
+		
+		with open('tmp_objects.csv','w',newline='') as csvfile: 
+			csvwriter = csv.writer(csvfile,delimiter=';')
+			for i in range(len(preflists)):
+				csvwriter.writerow(list(preflists[i]))
+		ttca.init_prefmatrix_from_csv_file('tmp_objects.csv',delimiter=';')
+		ttca.calculate_allocations()
+		self.assertEqual({'Adorno':'Focault','Focault':'Adorno','Weber':'Weber'},ttca.allocation_to_object_allocation())
+		
 class TestTtcaMethods(unittest.TestCase):
 	def test_ttca(self):
 		print("Test Ttca")
